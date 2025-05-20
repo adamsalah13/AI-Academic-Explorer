@@ -10,23 +10,12 @@ import logging
 logger = logging.getLogger(__name__)
 
 def clean_text(text):
-    """
-    Clean text by removing extra whitespace and normalizing line breaks
-    
-    Args:
-        text (str): Text to clean
-    
-    Returns:
-        str: Cleaned text
-    """
+    """Clean up text by removing extra whitespace and normalizing line breaks."""
     if not text:
         return ""
-        
-    # Replace multiple whitespace with single space
+    
+    # Replace multiple spaces and line breaks with a single space
     text = re.sub(r'\s+', ' ', text)
-    # Replace multiple newlines with single newline
-    text = re.sub(r'\n+', '\n', text)
-    # Strip leading/trailing whitespace
     return text.strip()
 
 def extract_text_from_element(element):
