@@ -34,7 +34,7 @@ The project requires the following Python packages:
 
 1. Clone this repository:
    ```
-   git clone https://github.com/yourusername/AI-Academic-Explorer.git
+   git clone https://github.com/adamsalah13/AI-Academic-Explorer.git
    cd AI-Academic-Explorer
    ```
 
