@@ -12,7 +12,7 @@ from utils.html_utils import clean_text
 # Get logger from configuration
 logger = setup_logger("CamosunScraper")
 
-class CamosunScraper:
+class CamosunProgramScraper:
     """
     Scraper for Camosun College programs information.
     """
@@ -82,7 +82,34 @@ class CamosunScraper:
         
         logger.info(f"Found {len(all_program_links)} program links in total")
         return all_program_links
-    
+
+    def get_program_outline_details(self, program_outline_url: str, program_data: dict):
+        """
+        Get program outline details from the program outline page.
+        """
+        html_content = self.get_page(program_outline_url)
+        soup = BeautifulSoup(html_content, 'lxml')
+
+        content_div = soup.select_one('.block_content') or soup.select_one('#gateway_container') or soup.select_one('div.main') or soup   
+        program_table = content_div.select_one('.program_description')
+        rows = program_table.select_one('table').select('td')
+        for i in range(0, len(rows), 2):
+            if i + 1 < len(rows):
+                # Extract the text from the first and second columns
+                header = clean_text(rows[i].get_text()).lower()
+                value = clean_text(rows[i + 1].get_text())
+
+                if 'credential' in header:
+                    program_data['credential'] = value
+                elif 'total credits' in header:
+                    program_data['total_credits'] = value
+                elif 'program code' in header:
+                    program_data['program_code'] = value
+                elif 'cip' in header:
+                    program_data['cip'] = value
+        
+        return program_data
+
 
     def get_program_courses(self, url):
         """
@@ -133,7 +160,6 @@ class CamosunScraper:
             #"what_you_will_learn": "",
             "tuition_info": "",
             "admission_requirements": "",
-            "contact_info": {}
         }
         
         # Extract program title
@@ -192,6 +218,7 @@ class CamosunScraper:
                     program_outline_link = urljoin(self.base_url, outline_button['href'])
                     program_data["program_outline_url"] = program_outline_link
                     program_data["curriculum"] = self.get_program_courses(program_outline_link)
+                    program_data = self.get_program_outline_details(program_outline_link, program_data)
         
         # Tuition tab
         money_tab = soup.select_one('#money_tab')
@@ -249,6 +276,7 @@ class CamosunScraper:
         
         return filename
 
+
 def main():
     from utils.file_utils import ensure_directory_exists
     
@@ -257,11 +285,11 @@ def main():
     ensure_directory_exists(output_dir)
     
     # Initialize and run the scraper
-    scraper = CamosunScraper()
+    scraper = CamosunProgramScraper()
     scraper.scrape_all_programs()
     
     # Save the data
-    output_file = os.path.join(output_dir, "camosun_programs_new.json")
+    output_file = os.path.join(output_dir, "camosun_programs.json")
     scraper.save_to_json(output_file)
     logger.info(f"Scraping completed. Data saved to {output_file}")
 
