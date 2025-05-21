@@ -5,9 +5,9 @@ import json
 import time
 import os
 import logging
+import traceback
 from urllib.parse import urljoin, parse_qs
 from utils.logger_config import setup_logger
-from utils.functions import clean_description
 # Get logger from configuration
 logger = setup_logger("CamosunCourseScraper")
 
@@ -45,7 +45,10 @@ class CamosunCourseScraper:
         
         for link in course_rows:
             if link.has_attr('href'):
-                course_url = urljoin(self.base_url, link['href'])
+                # extract coid from the onclick string
+                course_coid = link['onclick'].split(',')[1].strip().replace("'", "")
+                href_link = f'preview_course_nopop.php?catoid=25&coid={course_coid}'
+                course_url = urljoin(self.base_url, href_link)
                 course_code = link.text.strip()
                 course_links.append({
                     'code': course_code,
@@ -60,13 +63,15 @@ class CamosunCourseScraper:
         soup = BeautifulSoup(html_content, 'html.parser')
         
         course_data = {
-            "url": course_url['url'],
+            "url": course_url,
             "code": "",
             "title": "",
             "description": "",
             "credits": "",
             "hours": "",
-            "prerequisites": ""
+            "Prerequisites": "",
+            "Equivalencies": "",
+            "Pre or Co-requisites": ""
         }
 
         # Extract course title and code
@@ -80,27 +85,32 @@ class CamosunCourseScraper:
         # Extract course details from the content
         content = soup.select_one('td.block_content')
         if content:
-            desc_list = []
-            desc_elem = content.find('hr').find_next_sibling('hr').find_next(string=True)
-            if desc_elem:
-                while desc_elem.text.strip() != "Prerequisites":
-                    desc_list.append(desc_elem.text.strip())
-                    desc_elem = desc_elem.find_next(string=True)
-                result = clean_description(desc_list)
-                course_data["description"] = result
-                
-                #Extract Prerequisites
-                prereq_list = {}
-                key_list = desc_elem.find_next(string=True)
-                prereq_list[key_list] = []
-                preq_elem = content.find('ul')
-                if preq_elem:
-                    for li_elem in preq_elem.find_all('li'):
-                        prereq_list[key_list].append(li_elem.text.strip())
-                course_data["prerequisites"] = prereq_list
+            # Extract course description
+            text_list = content.find('p').find_all(string=True)
+            course_description = max(text_list, key=len)
+            course_data["description"] = course_description
+            # Extract course prerequisites list if exists
+            li_list = content.select('li')
+            if li_list:
+                prereq_list = []
+                for li_elem in li_list:
+                    prereq_list.append(li_elem.text.strip().replace('\xa0', ' '))
 
+                if 'Equivalencies' in text_list:
+                    course_data['Equivalencies'] = prereq_list
+                    
+                elif 'Pre or Co-requisites' in text_list:
+                    prereq_dict = {}
+                    list_key = text_list[text_list.index('Pre or Co-requisites') + 1].strip().replace(':', '')
+                    prereq_dict[list_key] = prereq_list
+                    course_data['Pre or Co-requisites'] = prereq_dict
+                elif 'Prerequisites' in text_list:
+                    prereq_dict = {}
+                    list_key = text_list[text_list.index('Prerequisites') + 1].strip().replace(':', '')
+                    prereq_dict[list_key] = prereq_list
+                    course_data['Prerequisites'] = prereq_dict
 
-            # Extract other details
+            # Extract credits and hours
             for strong_tag in content.find_all('strong'):
                 label = strong_tag.text.strip().lower()
                 value = strong_tag.next_sibling
@@ -111,14 +121,6 @@ class CamosunCourseScraper:
                         course_data["credits"] = value
                     elif "hour" in label:
                         course_data["hours"] = value
-                    elif "prerequisite" in label:
-                        course_data["prerequisites"] = value
-                    elif "corequisite" in label:
-                        course_data["corequisites"] = value
-                    elif "restriction" in label:
-                        course_data["restrictions"] = value
-                    elif "note" in label:
-                        course_data["notes"] = value
         
         return course_data
 
@@ -183,6 +185,7 @@ class CamosunCourseScraper:
                 time.sleep(2)  # Be nice to the server
             except Exception as e:
                 logger.error(f"Error processing course {course_link['code']}: {str(e)}")
+                logger.error("Full traceback:\n" + traceback.format_exc())
 
         return self.courses_data
     
